@@ -1,8 +1,9 @@
 from app.bot import setup_bot
 import logging
 import os
+import asyncio
 
-if __name__ == "__main__":
+async def main():
     # Set up logging
     logging.basicConfig(
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
@@ -10,26 +11,34 @@ if __name__ == "__main__":
     )
     logger = logging.getLogger(__name__)
     
-    # Get port from environment variable (for Heroku)
-    PORT = int(os.environ.get('PORT', 5000))
-    
     # Set up and start the bot
-    updater = setup_bot()
+    application = setup_bot()
     
     # Start the Bot
     if os.environ.get('ENVIRONMENT') == 'production':
         # Production: use webhook (for Heroku)
-        updater.start_webhook(
+        webhook_url = f"https://{os.environ.get('APP_NAME')}.herokuapp.com/{os.environ.get('TELEGRAM_TOKEN')}"
+        await application.bot.set_webhook(webhook_url)
+        
+        # Get port from environment variable (for Heroku)
+        PORT = int(os.environ.get('PORT', 5000))
+        
+        await application.start_webhook(
             listen="0.0.0.0",
             port=PORT,
             url_path=os.environ.get('TELEGRAM_TOKEN'),
-            webhook_url=f"https://{os.environ.get('APP_NAME')}.herokuapp.com/{os.environ.get('TELEGRAM_TOKEN')}"
+            webhook_url=webhook_url
         )
     else:
         # Development: use polling
-        updater.start_polling()
+        # The new version uses run_polling instead of start_polling
+        logger.info("Starting bot with polling...")
+    
+    # Run the bot until you press Ctrl-C or the process receives signals
+    await application.run_polling(allowed_updates=Update.ALL_TYPES)
     
     logger.info("Bot started")
-    
-    # Run the bot until you press Ctrl-C
-    updater.idle()
+
+if __name__ == "__main__":
+    # Run the main function
+    asyncio.run(main())

@@ -1,7 +1,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
-    Updater, CommandHandler, MessageHandler, Filters, 
-    CallbackContext, CallbackQueryHandler
+    Application, CommandHandler, MessageHandler, 
+    CallbackQueryHandler, ContextTypes, filters
 )
 import logging
 from app.database import get_session, User, Video
@@ -16,7 +16,7 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-def start(update: Update, context: CallbackContext) -> None:
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the /start command"""
     user = update.effective_user
     session = get_session()
@@ -43,7 +43,7 @@ def start(update: Update, context: CallbackContext) -> None:
                 
                 # Notify referrer
                 try:
-                    context.bot.send_message(
+                    await context.bot.send_message(
                         chat_id=referrer.user_id,
                         text=f"🎉 Someone used your referral code! You've earned 1 free video generation."
                     )
@@ -52,15 +52,15 @@ def start(update: Update, context: CallbackContext) -> None:
         
         session.commit()
         welcome_message = format_welcome_message(db_user.referral_code, db_user.free_generations)
-        update.message.reply_text(welcome_message)
+        await update.message.reply_text(welcome_message)
     else:
         # Existing user
         welcome_message = format_welcome_message(db_user.referral_code, db_user.free_generations)
-        update.message.reply_text(welcome_message)
+        await update.message.reply_text(welcome_message)
     
     session.close()
 
-def balance(update: Update, context: CallbackContext) -> None:
+async def balance(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the /balance command"""
     user = update.effective_user
     session = get_session()
@@ -74,13 +74,13 @@ def balance(update: Update, context: CallbackContext) -> None:
             f"Your referral code: {db_user.referral_code}\n"
             f"Share it with friends to earn free generations!"
         )
-        update.message.reply_text(message)
+        await update.message.reply_text(message)
     else:
-        update.message.reply_text("Please use /start to register first.")
+        await update.message.reply_text("Please use /start to register first.")
     
     session.close()
 
-def buy(update: Update, context: CallbackContext) -> None:
+async def buy(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the /buy command"""
     keyboard = [
         [
@@ -92,13 +92,13 @@ def buy(update: Update, context: CallbackContext) -> None:
         ]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
-    update.message.reply_text(
+    await update.message.reply_text(
         "💰 Buy more video generations using Telegram stars.\n"
         "Choose an option:",
         reply_markup=reply_markup
     )
 
-def help_command(update: Update, context: CallbackContext) -> None:
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle the /help command"""
     help_text = (
         "🎬 *AI Video Generator Bot Help* 🎬\n\n"
@@ -117,30 +117,30 @@ def help_command(update: Update, context: CallbackContext) -> None:
         "*Content Policy:*\n"
         "Please keep your prompts appropriate. Explicit, violent, or hateful content is not allowed."
     )
-    update.message.reply_text(help_text, parse_mode='Markdown')
+    await update.message.reply_text(help_text, parse_mode='Markdown')
 
-def button_callback(update: Update, context: CallbackContext) -> None:
+async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle button callbacks"""
     query = update.callback_query
-    query.answer()
+    await query.answer()
     
     if query.data.startswith("buy_"):
         amount = int(query.data.split("_")[1])
         # Here you would implement the actual Telegram payment
         # For now, we'll just show a message
-        query.edit_message_text(
+        await query.edit_message_text(
             text=f"To purchase {amount} video generations, please send {amount} stars through Telegram.\n\n"
                  f"This would typically integrate with Telegram's payment system."
         )
 
-def process_prompt(update: Update, context: CallbackContext) -> None:
+async def process_prompt(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Process text prompts and generate videos"""
     user = update.effective_user
     prompt = update.message.text
     
     # Check if prompt is safe
     if not is_safe_prompt(prompt):
-        update.message.reply_text(
+        await update.message.reply_text(
             "⚠️ Sorry, your prompt contains inappropriate content. "
             "Please try a different prompt."
         )
@@ -150,14 +150,14 @@ def process_prompt(update: Update, context: CallbackContext) -> None:
     db_user = session.query(User).filter(User.user_id == user.id).first()
     
     if not db_user:
-        update.message.reply_text("Please use /start to register first.")
+        await update.message.reply_text("Please use /start to register first.")
         session.close()
         return
     
     # Check if user has free generations or stars
     if db_user.free_generations > 0:
         # Use free generation
-        update.message.reply_text("🎬 Generating your video... This may take a moment.")
+        await update.message.reply_text("🎬 Generating your video... This may take a moment.")
         
         # Generate video
         video_url = generate_video(prompt)
@@ -177,20 +177,20 @@ def process_prompt(update: Update, context: CallbackContext) -> None:
             session.commit()
             
             # Send video
-            update.message.reply_text(
+            await update.message.reply_text(
                 f"🎥 Here's your video based on: '{prompt}'\n\n"
                 f"You have {db_user.free_generations} free generations left."
             )
             
             # Send video URL (in a real scenario, you'd download and send the actual video)
-            update.message.reply_text(f"Video URL: {video_url}")
+            await update.message.reply_text(f"Video URL: {video_url}")
         else:
-            update.message.reply_text(
+            await update.message.reply_text(
                 "😔 Sorry, I couldn't generate a video. Please try a different prompt."
             )
     elif db_user.stars >= STAR_COST:
         # Use stars
-        update.message.reply_text("🎬 Generating your video using 1 star... This may take a moment.")
+        await update.message.reply_text("🎬 Generating your video using 1 star... This may take a moment.")
         
         # Generate video
         video_url = generate_video(prompt)
@@ -210,15 +210,15 @@ def process_prompt(update: Update, context: CallbackContext) -> None:
             session.commit()
             
             # Send video
-            update.message.reply_text(
+            await update.message.reply_text(
                 f"🎥 Here's your video based on: '{prompt}'\n\n"
                 f"You have {db_user.stars} stars left."
             )
             
             # Send video URL (in a real scenario, you'd download and send the actual video)
-            update.message.reply_text(f"Video URL: {video_url}")
+            await update.message.reply_text(f"Video URL: {video_url}")
         else:
-            update.message.reply_text(
+            await update.message.reply_text(
                 "😔 Sorry, I couldn't generate a video. Please try a different prompt."
             )
     else:
@@ -228,7 +228,7 @@ def process_prompt(update: Update, context: CallbackContext) -> None:
         ]
         reply_markup = InlineKeyboardMarkup(keyboard)
         
-        update.message.reply_text(
+        await update.message.reply_text(
             "🚫 You've used all your free generations and have no stars.\n\n"
             "Buy stars to generate more videos or invite friends using your referral code to earn free generations.",
             reply_markup=reply_markup
@@ -236,24 +236,23 @@ def process_prompt(update: Update, context: CallbackContext) -> None:
     
     session.close()
 
-def error_handler(update: Update, context: CallbackContext) -> None:
+async def error_handler(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle errors"""
     logger.warning(f'Update "{update}" caused error "{context.error}"')
 
 def setup_bot():
-    """Set up and return the Telegram bot"""
-    updater = Updater(TELEGRAM_TOKEN)
-    dispatcher = updater.dispatcher
+    """Set up and return the Telegram bot application"""
+    application = Application.builder().token(TELEGRAM_TOKEN).build()
     
     # Register handlers
-    dispatcher.add_handler(CommandHandler("start", start))
-    dispatcher.add_handler(CommandHandler("balance", balance))
-    dispatcher.add_handler(CommandHandler("buy", buy))
-    dispatcher.add_handler(CommandHandler("help", help_command))
-    dispatcher.add_handler(CallbackQueryHandler(button_callback))
-    dispatcher.add_handler(MessageHandler(Filters.text & ~Filters.command, process_prompt))
+    application.add_handler(CommandHandler("start", start))
+    application.add_handler(CommandHandler("balance", balance))
+    application.add_handler(CommandHandler("buy", buy))
+    application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CallbackQueryHandler(button_callback))
+    application.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, process_prompt))
     
     # Register error handler
-    dispatcher.add_error_handler(error_handler)
+    application.add_error_handler(error_handler)
     
-    return updater
+    return application
