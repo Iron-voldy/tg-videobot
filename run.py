@@ -1,16 +1,16 @@
 from app.bot import setup_bot
 import logging
 import os
-import asyncio
+from telegram import Update
 
-async def main():
-    # Set up logging
-    logging.basicConfig(
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        level=logging.INFO
-    )
-    logger = logging.getLogger(__name__)
-    
+# Set up logging
+logging.basicConfig(
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    level=logging.INFO
+)
+logger = logging.getLogger(__name__)
+
+if __name__ == "__main__":
     # Set up and start the bot
     application = setup_bot()
     
@@ -18,12 +18,12 @@ async def main():
     if os.environ.get('ENVIRONMENT') == 'production':
         # Production: use webhook (for Heroku)
         webhook_url = f"https://{os.environ.get('APP_NAME')}.herokuapp.com/{os.environ.get('TELEGRAM_TOKEN')}"
-        await application.bot.set_webhook(webhook_url)
+        application.bot.set_webhook(webhook_url)
         
         # Get port from environment variable (for Heroku)
         PORT = int(os.environ.get('PORT', 5000))
         
-        await application.start_webhook(
+        application.run_webhook(
             listen="0.0.0.0",
             port=PORT,
             url_path=os.environ.get('TELEGRAM_TOKEN'),
@@ -31,14 +31,7 @@ async def main():
         )
     else:
         # Development: use polling
-        # The new version uses run_polling instead of start_polling
         logger.info("Starting bot with polling...")
-    
-    # Run the bot until you press Ctrl-C or the process receives signals
-    await application.run_polling(allowed_updates=Update.ALL_TYPES)
+        application.run_polling(allowed_updates=Update.ALL_TYPES)
     
     logger.info("Bot started")
-
-if __name__ == "__main__":
-    # Run the main function
-    asyncio.run(main())
